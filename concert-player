@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>콘서트 예습 플레이어</title>
+  <style>
+    body {
+      font-family: "Malgun Gothic", Arial, sans-serif;
+      margin: 0;
+      background: #111827;
+      color: #f3f4f6;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1 {
+      margin: 0 0 8px 0;
+      font-size: 28px;
+    }
+    .subtitle {
+      color: #cbd5e1;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 20px;
+    }
+    .panel {
+      background: #1f2937;
+      border-radius: 16px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+      padding: 16px;
+    }
+    .player-wrap {
+      position: relative;
+      width: 100%;
+      padding-top: 56.25%;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    #player {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+    button {
+      background: #22c55e;
+      border: none;
+      color: white;
+      padding: 10px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button.secondary {
+      background: #374151;
+    }
+    button:hover {
+      opacity: 0.92;
+    }
+    .now-playing {
+      margin-top: 14px;
+      padding: 12px;
+      background: #111827;
+      border-radius: 12px;
+      color: #e5e7eb;
+      min-height: 48px;
+    }
+    .song-list {
+      max-height: 75vh;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .song-item {
+      padding: 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-bottom: 8px;
+      background: #111827;
+      border: 1px solid transparent;
+    }
+    .song-item:hover {
+      border-color: #4b5563;
+    }
+    .song-item.active {
+      background: #065f46;
+      border-color: #34d399;
+    }
+    .meta {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-bottom: 4px;
+    }
+    .title {
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .note {
+      margin-top: 16px;
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+    code {
+      background: #0f172a;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+    @media (max-width: 860px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>콘서트 예습 플레이어</h1>
+    <div class="subtitle">
+      첫 곡은 직접 재생 버튼을 눌러야 할 수 있지만, 그 뒤에는 자동으로 다음 곡으로 넘어갑니다.
+    </div>
+
+    <div class="layout">
+      <div class="panel">
+        <div class="player-wrap">
+          <div id="player"></div>
+        </div>
+
+        <div class="controls">
+          <button onclick="startPlaylist()">처음부터 재생</button>
+          <button class="secondary" onclick="playPrev()">이전 곡</button>
+          <button class="secondary" onclick="playNext()">다음 곡</button>
+          <button class="secondary" onclick="toggleShuffle()">셔플: <span id="shuffleState">OFF</span></button>
+        </div>
+
+        <div class="now-playing" id="nowPlaying">재생 준비됨</div>
+
+        <div class="note">
+          영상이 안 뜨면 그 영상은 임베드가 막힌 경우일 수 있어. 그때는 다른 유튜브 영상 ID로 바꾸면 된다.<br>
+          예: <code>https://www.youtube.com/watch?v=afOPnYGjHkY</code> 라면 videoId는 <code>afOPnYGjHkY</code>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="song-list" id="songList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const playlist = [
+      { artist: "이승윤", title: "들려주고 싶었던", videoId: "afOPnYGjHkY" },
+      { artist: "이승윤", title: "비싼 숙취", videoId: "xlhQ0tI_xRA" },
+      { artist: "이승윤", title: "도킹", videoId: "NUWSDPqVXV4" },
+
+      { artist: "잠비나이", title: "소멸의 시간", videoId: "OC5jBQdh5vw" },
+      { artist: "잠비나이", title: "온다", videoId: "IgMii97-6KI" },
+
+      { artist: "너드커넥션", title: "좋은 밤 좋은 꿈", videoId: "mTonMiKVZRw" },
+      { artist: "너드커넥션", title: "Back in Time", videoId: "DZ-nBqDJA6A" },
+
+      { artist: "모스힐", title: "분", videoId: "tGUil-xqMzM" },
+
+      { artist: "심아일랜드", title: "밑 빠진 독", videoId: "Pxwn43RW1i0" }
+    ];
+
+    let player = null;
+    let currentIndex = 0;
+    let shuffleMode = false;
+    let shuffledOrder = [];
+
+    function buildSongList() {
+      const songList = document.getElementById("songList");
+      songList.innerHTML = "";
+
+      playlist.forEach((item, index) => {
+        const div = document.createElement("div");
+        div.className = "song-item";
+        div.id = `song-item-${index}`;
+        div.onclick = () => playAt(index);
+
+        div.innerHTML = `
+          <div class="meta">${index + 1}. ${item.artist}</div>
+          <div class="title">${item.title}</div>
+        `;
+        songList.appendChild(div);
+      });
+
+      highlightCurrent();
+    }
+
+    function highlightCurrent() {
+      playlist.forEach((_, index) => {
+        const el = document.getElementById(`song-item-${index}`);
+        if (!el) return;
+        el.classList.toggle("active", index === currentIndex);
+      });
+
+      const current = playlist[currentIndex];
+      if (current) {
+        document.getElementById("nowPlaying").innerHTML =
+          `<strong>현재 곡:</strong> ${current.artist} - ${current.title}`;
+      }
+    }
+
+    function makeShuffleOrder() {
+      shuffledOrder = [...Array(playlist.length).keys()];
+      for (let i = shuffledOrder.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledOrder[i], shuffledOrder[j]] = [shuffledOrder[j], shuffledOrder[i]];
+      }
+    }
+
+    function toggleShuffle() {
+      shuffleMode = !shuffleMode;
+      if (shuffleMode) makeShuffleOrder();
+      document.getElementById("shuffleState").textContent = shuffleMode ? "ON" : "OFF";
+    }
+
+    function getNextIndex() {
+      if (!shuffleMode) return (currentIndex + 1) % playlist.length;
+      const pos = shuffledOrder.indexOf(currentIndex);
+      if (pos === -1 || pos === shuffledOrder.length - 1) {
+        makeShuffleOrder();
+        return shuffledOrder[0];
+      }
+      return shuffledOrder[pos + 1];
+    }
+
+    function getPrevIndex() {
+      if (!shuffleMode) return (currentIndex - 1 + playlist.length) % playlist.length;
+      const pos = shuffledOrder.indexOf(currentIndex);
+      if (pos <= 0) return shuffledOrder[shuffledOrder.length - 1];
+      return shuffledOrder[pos - 1];
+    }
+
+    function onYouTubeIframeAPIReady() {
+      player = new YT.Player("player", {
+        height: "100%",
+        width: "100%",
+        videoId: playlist[0].videoId,
+        playerVars: {
+          autoplay: 0,
+          controls: 1,
+          rel: 0,
+          playsinline: 1
+        },
+        events: {
+          onReady: onPlayerReady,
+          onStateChange: onPlayerStateChange
+        }
+      });
+    }
+
+    function onPlayerReady() {
+      buildSongList();
+      highlightCurrent();
+    }
+
+    function onPlayerStateChange(event) {
+      if (event.data === YT.PlayerState.ENDED) {
+        playNext();
+      }
+    }
+
+    function playAt(index) {
+      currentIndex = index;
+      highlightCurrent();
+      if (player) player.loadVideoById(playlist[currentIndex].videoId);
+    }
+
+    function playNext() {
+      playAt(getNextIndex());
+    }
+
+    function playPrev() {
+      playAt(getPrevIndex());
+    }
+
+    function startPlaylist() {
+      currentIndex = 0;
+      playAt(currentIndex);
+    }
+  </script>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
